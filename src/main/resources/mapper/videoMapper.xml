@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.springdemo.dao.VideoDao">
+    <select id="search" resultType="com.example.springdemo.entity.video">
+        # select book.*,t.name as typename from book
+        # left join spring_demo.type t on book.typeid = t.id
+        select * from video
+        <where>
+            <!-- 这里的注释只能这样不能用# 这在sql语句内部 -->
+            <!-- !和=之间不能有空格 -->
+            <if test="params != null and params.id != null and params.id != null">
+                id = #{params.id}
+            </if>
+            <if test="params != null and params.uploader_id != null and params.uploader_id != ''">
+                and uploader_id like concat('%', #{params.uploader_id},'%')
+            </if>
+            <if test="params != null and params.video_name != null and params.video_name != ''">
+                <!-- 需要在第二个及后续条件前面手动添加 AND，以确保 SQL 的正确性。 -->
+                and video_name like concat('%', #{params.video_name},'%')
+            </if>
+        </where>
+    </select>
+
+</mapper>

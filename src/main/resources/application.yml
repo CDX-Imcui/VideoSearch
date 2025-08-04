@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/videosearch
+    username: root
+    password: 123456
+
+#    username: spring_demo
+#    password: m3mpKnBkbXS6YDLj
+  main:
+    allow-circular-references: true # 允许循环依赖
+  servlet:
+    session:
+      timeout: 30m
+    multipart:
+      max-file-size: 1024MB
+      max-request-size: 1024MB
+
+
+
+# 配置mybatis实体类的包路径和mapper文件的路径
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.example.springdemo.entity
+
+# 配置分页插件
+pagehelper:
+  helperDialect: mysql
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+

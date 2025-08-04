@@ -1,0 +1,17 @@
+
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+/*把所有元素变为盒装模型*/
+*{
+  /*外边距不会占用1px的像素*/
+  box-sizing: border-box;
+}
+
+
+
