@@ -1,4 +1,5 @@
 package com.example.springdemo.service;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpMethod;
@@ -25,10 +27,13 @@ import org.springframework.web.client.RestTemplate;
 
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
+
 @Slf4j
 @Service
 @EnableScheduling
 public class PollingService {
+    //文件存储路径
+    private static final String filePath = System.getProperty("user.dir") + "/file_video/";
 
     private final RestTemplate restTemplate = new RestTemplate();
     // 使用 Spring TaskScheduler 来动态调度任务
@@ -58,7 +63,7 @@ public class PollingService {
                 String status = json.optString("status", "");
                 log.info("[{}] status = {}", guid, status);
 
-                if ("finished".equalsIgnoreCase(status)) {
+                if ("completed".equalsIgnoreCase(status)) {
                     downloadVideo(guid);
                     cancel(guid);//下载完成后，取消对应的轮询任务，确保任务不会继续运行
                 }
@@ -72,7 +77,9 @@ public class PollingService {
         log.info("Registered polling task for guid={}", guid);
     }
 
-    /** 取消并移除轮询任务 */
+    /**
+     * 取消并移除轮询任务
+     */
     public void cancel(String guid) {
         ScheduledFuture<?> future = tasks.remove(guid);
         if (future != null) {
@@ -81,7 +88,9 @@ public class PollingService {
         }
     }
 
-    /** 下载处理后的视频 */
+    /**
+     * 下载处理后的视频
+     */
     private void downloadVideo(String guid) {
         String url = crowBaseUrl + "/result?flag=" + guid;
         try {
@@ -94,7 +103,7 @@ public class PollingService {
 
             if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
                 byte[] data = resp.getBody().getByteArray();
-                try (FileOutputStream fos = new FileOutputStream("processed_" + guid + ".mp4")) {
+                try (FileOutputStream fos = new FileOutputStream(filePath + guid + "_finished.mp4")) {
                     fos.write(data);
                     log.info("Video for {} downloaded.", guid);
                 }
@@ -106,7 +115,9 @@ public class PollingService {
         }
     }
 
-    /** 容器关闭时，取消所有任务 */
+    /**
+     * 容器关闭时，取消所有任务
+     */
     @PreDestroy
     public void shutdown() {
         tasks.keySet().forEach(this::cancel);
