@@ -44,6 +44,7 @@
       </div>
       <div v-show="processed">
         <h3>搜索后</h3>
+        <!--        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ '1754369694477'+ '_finished'"-->
         <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ form.video_guid+ '_finished'"
                type="video/mp4" style="height: 350px;display: block; "
                preload="metadata">does not support the video tag
@@ -127,7 +128,6 @@ interface Response<T> {
 function successUpload(res: Response<string>) {
   form.video_guid = res.data;
   console.log(res);
-  checkVideoReady(form.video_guid);
 }
 
 const submitVideo = async () => {
@@ -135,11 +135,12 @@ const submitVideo = async () => {
     ElMessage.error("视频未上传或 GUID 不存在");
     return;
   }
+  checkVideoReady(form.video_guid+ '_finished');
   try {
     const res = await request.post('/files/commit/' + form.video_guid)
     if (res.code === 200) {
-      // ElMessage.success("提交成功" + res.data);
-      ElMessage.success("提交成功");
+      ElMessage.success("提交成功:" + res.data);
+      // ElMessage.success("提交成功");
     } else {
       ElMessage.error('提交失败，res.code: ' + res.code + ', res.message: ' + res.message);
     }
@@ -151,22 +152,31 @@ const submitVideo = async () => {
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 function checkVideoReady(videoGuid: string) {
-  pollInterval = setInterval(() => {
-    fetch(`http://localhost:8080/api/files/${videoGuid}_finished`, { method: 'HEAD' })
-        .then(res => {
-          if (res.ok) {
-            if (pollInterval) clearInterval(pollInterval); // 停止轮询
-            const video = document.getElementById('resultVideo') as HTMLVideoElement;
-            // video.src = `http://localhost:8080/api/files/${videoGuid}_finished?ts=${Date.now()}`; // 加时间戳防止缓存
-            video.src = `http://localhost:8080/api/files/${videoGuid}_finished`;
-            video.load(); // 重新加载视频
-            video.style.display = 'block';
+  pollInterval = setInterval(async() => {
+    try {
+      const video = document.getElementById('resultVideo') as HTMLVideoElement | null;
+      if (video) {
+        video.src = `http://localhost:8080/api/files/${videoGuid}?ts=${Date.now()}`;
+
+        // Listen for the loadeddata event to ensure video is actually loaded
+        video.onloadeddata = () => {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
           }
-        })
-        .catch(err => {
-          console.log('Video not ready yet:'+err);
-          // 文件不存在时会进这里，不处理即可
-        });
+          video.style.display = 'block';
+        };
+
+        video.onerror = () => {
+          console.log('视频加载失败，继续轮询...');
+        };
+
+        video.load();
+      }
+    } catch (err) {
+      // 请求失败说明文件还没准备好，不处理
+      console.log('等待视频生成中…'+err);
+    }
   }, 2000); // 每2秒轮询一次
 }
 

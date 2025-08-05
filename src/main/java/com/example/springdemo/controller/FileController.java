@@ -85,7 +85,7 @@ public class FileController {
         String videoFile = filesNames.stream().filter(name -> name.contains(flag)).findAny().orElse("");
         if (StrUtil.isEmpty(videoFile)) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
+//            return Result.error("文件不存在");
         }
         File file = new File(filePath + videoFile);
         long fileLength = file.length();
@@ -129,9 +129,11 @@ public class FileController {
             }
 
             os.flush();
+//            return Result.success("视频流处理成功");
         } catch (IOException e) {
             System.out.println("视频流处理失败: " + e.getMessage());
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+//            return Result.error("视频流拉取失败");
         }
 
     }
