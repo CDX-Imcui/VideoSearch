@@ -131,7 +131,7 @@ public class FileController {
             os.flush();
 //            return Result.success("视频流处理成功");
         } catch (IOException e) {
-            System.out.println("视频流处理失败: " + e.getMessage());
+            System.out.println("视频流拉取失败: " + e.getMessage());
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 //            return Result.error("视频流拉取失败");
         }

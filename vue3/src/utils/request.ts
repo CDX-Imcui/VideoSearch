@@ -6,7 +6,7 @@ import axios from "axios";
 //创建一个axios对象出来
 const request = axios.create({
     baseURL: 'http://localhost:8080/api',//请求的基础路径。webconfig增加了路径前缀，这里也要对应
-    timeout: 10000
+    timeout: 100000
 })
 
 //request拦截器，可以自请求发送前对请求做一些处理，例如统一加token，对请求参数统一加密
