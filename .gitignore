@@ -32,6 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 /file_video/*.mp4
-*.mp4
+
 /vue3/node_modules
 /node_modules
