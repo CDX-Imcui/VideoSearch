@@ -3,7 +3,3 @@
 ![example](example.png)
 运行示例 example.mp4
 
-<video width="640" height="360" controls>
-  <source src="./example.mp4" type="video/mp4">
-  不支持 video 标签
-</video>
