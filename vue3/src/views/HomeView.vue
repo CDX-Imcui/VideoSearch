@@ -32,6 +32,7 @@
         <el-icon>
           <Upload/>
         </el-icon>
+        <!--        上传-->
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <div class="el-upload__tip">支持 mp4/webm/avi，文件不超过1GB</div>
       </el-upload>
@@ -44,8 +45,9 @@
       </div>
       <div v-show="processed">
         <h3>搜索后</h3>
-        <!--        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ '1754369694477'+ '_finished'"-->
-        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ form.video_guid+ '_finished'"
+<!--        取消src，避免一上来就去访问后端，等提交成功任务-->
+<!--        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ form.video_guid+ '_finished'"-->
+        <video id="resultVideo" controls
                type="video/mp4" style="height: 350px;display: block; "
                preload="metadata">does not support the video tag
         </video>
@@ -62,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import {ref, reactive} from 'vue'
+import {reactive, ref} from 'vue'
 import {ElMessage} from "element-plus";
 import {Upload} from "@element-plus/icons-vue";
 import request from "@/utils/request.ts";
@@ -99,7 +101,8 @@ const user = ref(
     localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") as string) : {}
 );
 
-const LocalVideoURL = ref<string | undefined>(undefined);
+const LocalVideoURL = ref<string | undefined>(undefined);//要求 LocalVideoURL 在无视频时为假值
+// const LocalVideoURL = ref<string>('');//在布尔上下文中，undefined 和空字符串都会被视为 false，也可以
 const processed = ref<boolean>(true);
 
 function beforeUpload(file: File) {
@@ -112,11 +115,11 @@ function beforeUpload(file: File) {
 }
 
 // 选中文件后展示缩略图
-function handleFileChange(fileObj: any) {
-  const file = fileObj.raw
+function handleFileChange(fileObj: any) {//函数会在用户选择文件后被调用，接收一个 fileObj 参数
+  const file = fileObj.raw//从文件对象中获取原始文件
   if (!file) return
-  const url = URL.createObjectURL(file)
-  LocalVideoURL.value = url
+  //为文件创建一个临时 URL，指向本地文件的临时链接，可以用来预览文件内容
+  LocalVideoURL.value = URL.createObjectURL(file)
 }
 
 interface Response<T> {
@@ -135,36 +138,37 @@ const submitVideo = async () => {
     ElMessage.error("视频未上传或 GUID 不存在");
     return;
   }
-  checkVideoReady(form.video_guid+ '_finished');
   try {
     const res = await request.post('/files/commit/' + form.video_guid)
     if (res.code === 200) {
       ElMessage.success("提交成功:" + res.data);
-      // ElMessage.success("提交成功");
+      checkVideoReady(form.video_guid + '_finished');
     } else {
       ElMessage.error('提交失败，res.code: ' + res.code + ', res.message: ' + res.message);
     }
   } catch (e: any) {
     ElMessage.error(`提交失败：${e || '未知错误'}`);
   }
+
 }
 
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 function checkVideoReady(videoGuid: string) {
-  pollInterval = setInterval(async() => {
+  //让浏览器自己加载视频文件
+  pollInterval = setInterval(async () => {
     try {
       const video = document.getElementById('resultVideo') as HTMLVideoElement | null;
       if (video) {
         video.src = `http://localhost:8080/api/files/${videoGuid}?ts=${Date.now()}`;
 
-        // Listen for the loadeddata event to ensure video is actually loaded
+        // 检查视频是否真正可播放，监听 loadeddata 事件以确保视频确实已加载
         video.onloadeddata = () => {
           if (pollInterval) {
-            clearInterval(pollInterval);
+            clearInterval(pollInterval);//停止轮询
             pollInterval = null;
           }
-          video.style.display = 'block';
+          video.style.display = 'block';// 显示视频
         };
 
         video.onerror = () => {
@@ -175,7 +179,7 @@ function checkVideoReady(videoGuid: string) {
       }
     } catch (err) {
       // 请求失败说明文件还没准备好，不处理
-      console.log('等待视频生成中…'+err);
+      console.log('等待视频生成中…' + err);
     }
   }, 2000); // 每2秒轮询一次
 }
