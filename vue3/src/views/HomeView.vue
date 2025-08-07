@@ -45,8 +45,8 @@
       </div>
       <div v-show="processed">
         <h3>搜索后</h3>
-<!--        取消src，避免一上来就去访问后端，等提交成功任务-->
-<!--        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ form.video_guid+ '_finished'"-->
+        <!--        取消src，避免一上来就去访问后端，等提交成功任务-->
+        <!--        <video id="resultVideo" controls :src="'http://localhost:8080/api/files/'+ form.video_guid+ '_finished'"-->
         <video id="resultVideo" controls
                type="video/mp4" style="height: 350px;display: block; "
                preload="metadata">does not support the video tag
@@ -139,9 +139,10 @@ const submitVideo = async () => {
     return;
   }
   try {
+    ElMessage.success("正在提交…");//！即使反馈
     const res = await request.post('/files/commit/' + form.video_guid)
     if (res.code === 200) {
-      ElMessage.success("提交成功:" + res.data);
+      ElMessage.success("传输完成，开始处理:" + res.data);
       checkVideoReady(form.video_guid + '_finished');
     } else {
       ElMessage.error('提交失败，res.code: ' + res.code + ', res.message: ' + res.message);
@@ -156,6 +157,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 function checkVideoReady(videoGuid: string) {
   //让浏览器自己加载视频文件
+  //pollInterval 变量存储定时器的 ID，以便之后可以通过 clearInterval() 停止轮询
   pollInterval = setInterval(async () => {
     try {
       const video = document.getElementById('resultVideo') as HTMLVideoElement | null;

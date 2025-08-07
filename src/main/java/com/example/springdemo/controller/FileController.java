@@ -42,6 +42,7 @@ public class FileController {
     private static final String filePath = System.getProperty("user.dir") + "/file_video/";
     @Autowired
     private PollingService pollingService;
+
     /*
     //文件上传
      */
@@ -70,9 +71,7 @@ public class FileController {
         }
     }
 
-    /*
-       获取文件
-        */
+//    获取文件
     @GetMapping("/{flag}")
     public void avatarPath(@PathVariable String flag, HttpServletRequest request, HttpServletResponse response) {
 
@@ -85,7 +84,6 @@ public class FileController {
         String videoFile = filesNames.stream().filter(name -> name.contains(flag)).findAny().orElse("");
         if (StrUtil.isEmpty(videoFile)) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-//            return Result.error("文件不存在");
         }
         File file = new File(filePath + videoFile);
         long fileLength = file.length();
@@ -129,13 +127,10 @@ public class FileController {
             }
 
             os.flush();
-//            return Result.success("视频流处理成功");
         } catch (IOException e) {
             System.out.println("视频流拉取失败: " + e.getMessage());
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-//            return Result.error("视频流拉取失败");
         }
-
     }
 
     @PostMapping("/commit/{flag}")//vue点击提交 给处理模块，返回 done:{flag}
@@ -149,7 +144,8 @@ public class FileController {
             }
 
             try {
-                FileSystemResource resource = new FileSystemResource(new File(filePath + videoFile));
+                File file = new File(filePath + videoFile);
+                FileSystemResource resource = new FileSystemResource(file);
 
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
@@ -165,8 +161,8 @@ public class FileController {
                 return Result.success(response); // response 可以是文件名或结果信息
             } catch (Exception e) {
                 System.out.println(videoFile + "提交给搜索模块失败");
+                return Result.error(flag + "提交给搜索模块失败：" + e.getMessage());
             }
-            return Result.success(flag);
         }
     }
 
