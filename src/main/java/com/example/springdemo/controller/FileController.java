@@ -28,6 +28,7 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.core.io.Resource;
@@ -71,7 +72,7 @@ public class FileController {
         }
     }
 
-//    获取文件
+    //    获取文件
     @GetMapping("/{flag}")
     public void avatarPath(@PathVariable String flag, HttpServletRequest request, HttpServletResponse response) {
 
@@ -133,9 +134,14 @@ public class FileController {
         }
     }
 
-    @PostMapping("/commit/{flag}")//vue点击提交 给处理模块，返回 done:{flag}
-    public Result commit(@PathVariable String flag) {
+    //    @PostMapping("/commit/{flag}")//vue点击提交 给处理模块，返回 done:{flag}
+//    public Result commit(@PathVariable String flag) {
+    @PostMapping("/commit")//vue点击提交 给处理模块，返回 done:{flag}
+    public Result commit(@RequestBody Map<String, Object> info) {
         synchronized (FileController.class) {
+            String flag= (String) info.get("flag");
+            List<String> selectedClasses = (List<String>) info.get("selectedClasses");
+
             List<String> filesNames = FileUtil.listFileNames(filePath);
             //获取文件名
             String videoFile = filesNames.stream().filter(name -> name.contains(flag)).findAny().orElse("");
@@ -147,14 +153,27 @@ public class FileController {
                 File file = new File(filePath + videoFile);
                 FileSystemResource resource = new FileSystemResource(file);
 
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-                headers.setContentLength(resource.contentLength());
+//                HttpHeaders headers = new HttpHeaders();
+//                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);//二进制流，单一文件传输，无结构化信息
+//                headers.setContentLength(resource.contentLength());
+//
+//                HttpEntity<Resource> entity = new HttpEntity<>(resource, headers);
+//
+//                RestTemplate restTemplate = new RestTemplate();
+//                String response = restTemplate.postForObject("http://localhost:8083/receive?flag=" + flag, entity, String.class);
 
-                HttpEntity<Resource> entity = new HttpEntity<>(resource, headers);
+                MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+                body.add("file", resource); // 发送文件
+                body.add("flag", flag); // 发送 flag
+                body.add("selectedClasses", selectedClasses); // 发送数组
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.MULTIPART_FORM_DATA);//多部分表单数据，文件和其他表单字段的混合传输，分段传输 每段有独立的 Content-Type
+
+                HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
                 RestTemplate restTemplate = new RestTemplate();
-                String response = restTemplate.postForObject("http://localhost:8083/receive?flag=" + flag, entity, String.class);
+                String response = restTemplate.postForObject("http://localhost:8083/receive", requestEntity, String.class);
                 System.out.println("处理模块返回：" + response);
                 // 注册轮询
                 pollingService.register(flag);

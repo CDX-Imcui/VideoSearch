@@ -44,7 +44,7 @@
       <h3>原视频</h3>
       <video :src="LocalVideoURL" controls class="video-player"/>
       <el-button
-          v-show="form.video_guid"
+          :style="{ visibility: form.video_guid && selectedClasses.length > 0 ? 'visible' : 'hidden' }"
           type="primary"
           class="button"
           @click="submitVideo">
@@ -79,7 +79,7 @@ import {Upload, DataAnalysis} from "@element-plus/icons-vue";
 import {ElMessage} from "element-plus";
 import request from "@/utils/request.ts";
 
-const CLASS_NAMES = ref<string[]>(["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
+const CLASS_NAMES = ref<string[]>(["person", "car", "bicycle", "motorcycle", "airplane", "bus", "train",
   "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog",
   "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie",
   "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard",
@@ -157,7 +157,8 @@ const submitVideo = async () => {
   }
   try {
     ElMessage.success("正在提交…");//！即使反馈
-    const res = await request.post('/files/commit/' + form.video_guid)
+    // const res = await request.post('/files/commit/' + form.video_guid)
+    const res = await request.post('/files/commit', {flag: form.video_guid, selectedClasses: selectedClasses.value});
     if (res.code === 200) {
       ElMessage.success("传输完成，开始处理:" + res.data);
       checkVideoReady(form.video_guid + '_finished');
