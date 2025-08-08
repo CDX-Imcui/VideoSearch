@@ -39,12 +39,13 @@
   </div>
 
   <!--视频播放区域-->
-  <div class="video-section">
-    <div v-show="LocalVideoURL" class="video-container">
+  <div class="video-section" v-show="LocalVideoURL">
+    <div class="video-container">
       <h3>原视频</h3>
       <video :src="LocalVideoURL" controls class="video-player"/>
+      <!--      <el-button-->
+      <!--          :style="{ visibility: form.video_guid && selectedClasses.length > 0 ? 'visible' : 'hidden' }"-->
       <el-button
-          :style="{ visibility: form.video_guid && selectedClasses.length > 0 ? 'visible' : 'hidden' }"
           type="primary"
           class="button"
           @click="submitVideo">
@@ -52,7 +53,7 @@
       </el-button>
     </div>
 
-    <div  class="video-container">
+    <div class="video-container">
       <h3>搜索后</h3>
       <video
           id="resultVideo"
@@ -75,7 +76,7 @@
 
 <script setup lang="ts">
 import {reactive, ref} from 'vue'
-import {Upload, DataAnalysis} from "@element-plus/icons-vue";
+import {DataAnalysis, Upload} from "@element-plus/icons-vue";
 import {ElMessage} from "element-plus";
 import request from "@/utils/request.ts";
 
@@ -173,37 +174,37 @@ const submitVideo = async () => {
 }
 
 let pollInterval: ReturnType<typeof setInterval> | null = null;
+let listenerBound = false;
 
 function checkVideoReady(videoGuid: string) {
-  //让浏览器自己加载视频文件
-  //pollInterval 变量存储定时器的 ID，以便之后可以通过 clearInterval() 停止轮询
-  pollInterval = setInterval(async () => {
-    try {
-      const video = document.getElementById('resultVideo') as HTMLVideoElement | null;
-      if (video) {
-        video.src = `http://localhost:8080/api/files/${videoGuid}?ts=${Date.now()}`;
+  const video = document.getElementById('resultVideo') as HTMLVideoElement | null;
+  if (!video) return;
 
-        // 检查视频是否真正可播放，监听 loadeddata 事件以确保视频确实已加载
-        video.onloadeddata = () => {
-          if (pollInterval) {
-            processed.value = true;//记录下处理完毕
-            clearInterval(pollInterval);//停止轮询
-            pollInterval = null;
-          }
-          video.style.display = 'block';// 显示视频
-        };
-
-        video.onerror = () => {
-          console.log('暂无视频，继续轮询...');
-        };
-
-        video.load();
+  if (!listenerBound) {// 只绑定一次监听器
+    video.addEventListener('loadeddata', () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);//  停止轮询
+        pollInterval = null;
       }
-    } catch (err) {
-      console.log('轮询错误：' + err);
-    }
-  }, 2000); // 每2秒轮询一次
+      processed.value = true;
+      video.style.display = 'block';
+      console.log('视频加载成功，停止轮询。');
+    });
+
+    video.addEventListener('error', () => {
+      console.log('视频还没就绪，继续轮询...');
+    });
+    listenerBound = true;
+  }
+
+  if (!pollInterval) {
+    pollInterval = setInterval(() => {
+      video.src = `http://localhost:8080/api/files/${videoGuid}?ts=${Date.now()}`;
+      video.load();   // 触发加载流程，浏览器会触发对应事件
+    }, 2000); // 每2秒执行
+  }
 }
+
 
 // 显示信息
 const showStats = () => {
