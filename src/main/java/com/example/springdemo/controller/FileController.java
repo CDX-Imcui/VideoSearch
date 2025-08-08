@@ -149,17 +149,20 @@ public class FileController {
             if (StrUtil.isEmpty(videoFile)) {
                 return Result.error("文件未找到");
             }
-            //提交前先检查删除缓存结果，以便多次提交
-            String cacheFile = filePath + flag + "_finished.mp4";
-            if (FileUtil.exist(cacheFile)) {
-                FileUtil.del(cacheFile);
-                System.out.println("删除缓存的处理结果文件：" + cacheFile);
-            }
+
 
             try {
-                File file = new File(filePath + videoFile);
-                FileSystemResource resource = new FileSystemResource(file);
-
+                FileSystemResource resource = null;
+                //提交前先检查删除缓存结果，以便多次提交
+                String cacheFile = filePath + flag + "_finished.mp4";
+                if (FileUtil.exist(cacheFile)) {
+                    FileUtil.del(cacheFile);
+                    System.out.println("删除缓存的处理结果文件：" + cacheFile);
+                    //有缓存说明服务端已有视频，无需重传
+                }else {
+                    File file = new File(filePath + videoFile);
+                    resource = new FileSystemResource(file);
+                }
 //                HttpHeaders headers = new HttpHeaders();
 //                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);//二进制流，单一文件传输，无结构化信息
 //                headers.setContentLength(resource.contentLength());
