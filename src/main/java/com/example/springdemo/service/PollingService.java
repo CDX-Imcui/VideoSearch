@@ -55,10 +55,10 @@ public class PollingService {
             return;
         }
 
-        Runnable task = () -> {
+        Runnable task = () -> {//定义了一个 Lambda 表达式，表示 Runnable 接口的实现。表示一个可以在单独线程中运行的任务
             try {
                 String statusUrl = crowBaseUrl + "/task_status?flag=" + guid;
-                String body = restTemplate.getForObject(statusUrl, String.class);
+                String body = restTemplate.getForObject(statusUrl, String.class);//向statusUrl发请求，返回的响应体给body
                 JSONObject json = new JSONObject(body);
                 String status = json.optString("status", "");
                 log.info("[{}] status = {}", guid, status);
@@ -71,9 +71,9 @@ public class PollingService {
                 log.error("[{}] polling error: {}", guid, ex.getMessage());
             }
         };
-
+        //使用 TaskScheduler 每隔 5 秒执行一次任务
         ScheduledFuture<?> future = scheduler.scheduleWithFixedDelay(task, new Date(), TimeUnit.SECONDS.toMillis(5));
-        tasks.put(guid, future);
+        tasks.put(guid, future);//将任务的 ScheduledFuture 对象存储到 tasks 中，以便后续取消任务
         log.info("Registered polling task for guid={}", guid);
     }
 
@@ -81,9 +81,9 @@ public class PollingService {
      * 取消并移除轮询任务
      */
     public void cancel(String guid) {
-        ScheduledFuture<?> future = tasks.remove(guid);
+        ScheduledFuture<?> future = tasks.remove(guid);//将tasks map中的任务对象拿出来
         if (future != null) {
-            future.cancel(false);
+            future.cancel(false);//任务存在则取消，参数 false 表示不立即中断正在执行的任务，但阻止未来的调度执行
             log.info("Cancelled polling task for guid={}", guid);
         }
     }

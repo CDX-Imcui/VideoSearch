@@ -72,7 +72,7 @@ public class FileController {
         }
     }
 
-    //    获取文件
+    //  支持断点续传的视频流输出接口
     @GetMapping("/{flag}")
     public void avatarPath(@PathVariable String flag, HttpServletRequest request, HttpServletResponse response) {
 
@@ -89,9 +89,10 @@ public class FileController {
         File file = new File(filePath + videoFile);
         long fileLength = file.length();
 
+        //带一个 Range: bytes=start-end 请求头，告诉服务器只要这段字节的数据
         String range = request.getHeader("Range");
 
-        response.setHeader("Accept-Ranges", "bytes");
+        response.setHeader("Accept-Ranges", "bytes");//Accept-Ranges: bytes: 告诉浏览器支持按字节请求
         response.setContentType("video/mp4");
 
         try (RandomAccessFile raf = new RandomAccessFile(file, "r");
@@ -104,17 +105,17 @@ public class FileController {
                 long end = parts.length > 1 && !parts[1].isEmpty() ? Long.parseLong(parts[1]) : fileLength - 1;
                 long contentLength = end - start + 1;
 
-                // 设置206部分内容返回
+                // 设置206 状态码Partial Content: 说明返回的是部分数据，而不是完整文件
                 response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
-                response.setHeader("Content-Range", String.format("bytes %d-%d/%d", start, end, fileLength));
-                response.setHeader("Content-Length", String.valueOf(contentLength));
+                response.setHeader("Content-Range", String.format("bytes %d-%d/%d", start, end, fileLength));//Content-Range: 告诉浏览器返回的是哪一段，例如 bytes 100000-199999/500000
+                response.setHeader("Content-Length", String.valueOf(contentLength));//Content-Length: 这次返回的字节数（分段的话就是片段长度，全量就是文件总长度）
 
-                raf.seek(start);
+                raf.seek(start);//断点续传的实现靠的是 RandomAccessFile，直接跳到文件的指定位置开始读
                 byte[] buffer = new byte[1024 * 8];
                 long bytesRemaining = contentLength;
                 int len;
                 while (bytesRemaining > 0 && (len = raf.read(buffer, 0, (int) Math.min(buffer.length, bytesRemaining))) != -1) {
-                    os.write(buffer, 0, len);
+                    os.write(buffer, 0, len);//分块读取再写到 response.getOutputStream()
                     bytesRemaining -= len;
                 }
             } else {
@@ -139,7 +140,7 @@ public class FileController {
     @PostMapping("/commit")//vue点击提交 给处理模块，返回 done:{flag}
     public Result commit(@RequestBody Map<String, Object> info) {
         synchronized (FileController.class) {
-            String flag= (String) info.get("flag");
+            String flag = (String) info.get("flag");
             List<String> selectedClasses = (List<String>) info.get("selectedClasses");
 
             List<String> filesNames = FileUtil.listFileNames(filePath);
@@ -147,6 +148,12 @@ public class FileController {
             String videoFile = filesNames.stream().filter(name -> name.contains(flag)).findAny().orElse("");
             if (StrUtil.isEmpty(videoFile)) {
                 return Result.error("文件未找到");
+            }
+            //提交前先检查删除缓存结果，以便多次提交
+            String cacheFile = filePath + flag + "_finished.mp4";
+            if (FileUtil.exist(cacheFile)) {
+                FileUtil.del(cacheFile);
+                System.out.println("删除缓存的处理结果文件：" + cacheFile);
             }
 
             try {
@@ -168,7 +175,8 @@ public class FileController {
                 body.add("selectedClasses", selectedClasses); // 发送数组
 
                 HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.MULTIPART_FORM_DATA);//多部分表单数据，文件和其他表单字段的混合传输，分段传输 每段有独立的 Content-Type
+                // 构造一个 HTTP 请求，表示该请求的主体是多部分表单数据，确保文件和其他表单字段（flag 和 selectedClasses）能够正确地被后端接收和解析
+                headers.setContentType(MediaType.MULTIPART_FORM_DATA);//文件和其他表单字段的混合传输，分段传输 每段有独立的 Content-Type
 
                 HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 

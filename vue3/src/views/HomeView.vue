@@ -52,7 +52,7 @@
       </el-button>
     </div>
 
-    <div v-show="processed" class="video-container">
+    <div  class="video-container">
       <h3>搜索后</h3>
       <video
           id="resultVideo"
@@ -158,6 +158,7 @@ const submitVideo = async () => {
   try {
     ElMessage.success("正在提交…");//！即使反馈
     // const res = await request.post('/files/commit/' + form.video_guid)
+    processed.value = false; // 重置处理状态
     const res = await request.post('/files/commit', {flag: form.video_guid, selectedClasses: selectedClasses.value});
     if (res.code === 200) {
       ElMessage.success("传输完成，开始处理:" + res.data);
