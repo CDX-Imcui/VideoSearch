@@ -42,7 +42,7 @@
   <div class="video-section" v-show="LocalVideoURL">
     <div class="video-container">
       <h3>原视频</h3>
-      <video :src="LocalVideoURL" controls class="video-player"/>
+      <video :src="LocalVideoURL" controls/>
       <!--      <el-button-->
       <!--          :style="{ visibility: form.video_guid && selectedClasses.length > 0 ? 'visible' : 'hidden' }"-->
       <el-button
@@ -54,6 +54,7 @@
     </div>
 
     <div class="video-container">
+
       <h3>搜索后</h3>
       <video
           id="resultVideo"
@@ -63,7 +64,7 @@
           preload="metadata">
         does not support the video tag
       </video>
-      <el-button class="button" type="success" @click="showStats">
+      <el-button class="button" type="success" @click="showAnalysis">
         <el-icon>
           <DataAnalysis/>
         </el-icon>
@@ -115,6 +116,7 @@ const user = ref(
 const LocalVideoURL = ref<string | undefined>(undefined);//要求 LocalVideoURL 在无视频时为假值
 // const LocalVideoURL = ref<string>('');//在布尔上下文中，undefined 和空字符串都会被视为 false，也可以
 const processed = ref<boolean>(false);
+let analysis = ref<string[]>([]);
 
 function beforeUpload(file: File) {
   const maxSize = 1024 * 1024 * 1024; // 1GB
@@ -163,7 +165,7 @@ const submitVideo = async () => {
     const res = await request.post('/files/commit', {flag: form.video_guid, selectedClasses: selectedClasses.value});
     if (res.code === 200) {
       ElMessage.success("传输完成，开始处理:" + res.data);
-      checkVideoReady(form.video_guid + '_finished');
+      checkVideoReady(form.video_guid);
     } else {
       ElMessage.error('提交失败，res.code: ' + res.code + ', res.message: ' + res.message);
     }
@@ -189,6 +191,7 @@ function checkVideoReady(videoGuid: string) {
       processed.value = true;
       video.style.display = 'block';
       console.log('视频加载成功，停止轮询。');
+      getAnalysis(); // 视频加载成功后获取分析
     });
 
     video.addEventListener('error', () => {
@@ -198,23 +201,55 @@ function checkVideoReady(videoGuid: string) {
   }
 
   if (!pollInterval) {
-    pollInterval = setInterval(() => {
-      video.src = `http://localhost:8080/api/files/${videoGuid}?ts=${Date.now()}`;
+    pollInterval = setInterval(async () => {
+      video.src = `http://localhost:8080/api/files/${videoGuid + '_finished'}?ts=${Date.now()}`;
       video.load();   // 触发加载流程，浏览器会触发对应事件
     }, 2000); // 每2秒执行
   }
 }
 
 
-// 显示信息
-const showStats = () => {
-  if (!form.video_guid) {
-    ElMessage.warning('先上传视频');
-    return;
+// getAnalysis
+const getAnalysis = async () => {
+  try {
+    ElMessage.success("getAnalysis函数开始执行");
+    const res = await request.get('/files/analysis/' + form.video_guid);
+    if (res.code === 200) {
+      analysis.value = res.data;
+      analysis.value = parseRangeToMinSec(analysis.value)
+      console.log('分析结果:', analysis.value);
+    } else {
+      ElMessage.error('分析统计失败，res.code: ' + res.code + ', res.message: ' + res.message);
+    }
+  } catch (e) {
+    ElMessage.error('分析失败：' + (e as Error).message);
   }
 
 };
 
+function parseRangeToMinSec(ranges: string[]): string[] {
+  // 辅助：把数字字符串转成 分'秒'' 格式
+  function toMinSec(numStr: string): string {
+    const num = parseFloat(numStr);
+    if (isNaN(num)) return numStr;
+    const min = Math.floor(num);
+    const sec = ((num - min) * 60).toFixed(2);
+    return `${min}:${sec}、`;
+  }
+
+  return ranges.map(range => {
+    const parts = range.split('-');
+    if (parts.length !== 2) return range; // 格式异常，直接返回
+    const start = toMinSec(parts[0]);
+    const end = toMinSec(parts[1]);
+    return `${start} - ${end}`;
+  });
+}
+
+function showAnalysis() {
+  const formattedStr = analysis.value.join(', ');
+  ElMessage.success(formattedStr);
+}
 </script>
 
 <style scoped>
@@ -243,28 +278,37 @@ const showStats = () => {
 .video-section {
   display: flex;
   align-items: flex-start;
-  gap: 40px;
-  padding: 20px;
+  gap: 20px;
+  padding: 20px 30px;
   border-radius: 8px;
   background-color: #f5f7fa;
+  justify-content: space-between; /* 确保均匀分布 */
+  width: 100%; /* 确保容器占满宽度 */
 }
 
 .video-container {
   background: white;
-  padding: 15px;
+  padding: 10px 0;
   border-radius: 6px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex: 1; /* 让每个子元素均分宽度 */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 横向居中 */
 }
 
-.video-player {
-  height: 350px;
+video {
+  width: 622px;
+  height: 350px; /* 保持高度 */
   display: block;
+  margin: 0 auto; /* 水平居中 */
   border-radius: 4px;
+  background: #000; /* 没资源时显示黑底，不会很窄 */
 }
 
 .button {
   margin: 10px 0;
-  width: 100%;
+  width: 622px;
 }
 </style>
 

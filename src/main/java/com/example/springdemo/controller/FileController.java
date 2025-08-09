@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import com.example.springdemo.common.Result;
 import com.example.springdemo.service.PollingService;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
@@ -27,6 +28,7 @@ import java.io.RandomAccessFile;
 import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -159,7 +161,7 @@ public class FileController {
                     FileUtil.del(cacheFile);
                     System.out.println("删除缓存的处理结果文件：" + cacheFile);
                     //有缓存说明服务端已有视频，无需重传
-                }else {
+                } else {
                     File file = new File(filePath + videoFile);
                     resource = new FileSystemResource(file);
                 }
@@ -196,35 +198,56 @@ public class FileController {
         }
     }
 
-    @GetMapping("/status/{flag}")//前端获知处理状态
+    @GetMapping("/status/{flag}")//前端获知服务端处理状态
     public Result getProcessingStatus(@PathVariable String flag) {
         try {
             RestTemplate restTemplate = new RestTemplate();
-            String status = restTemplate.getForObject(
-                    "http://localhost:8083/status/" + flag,
-                    String.class
-            );
-            return Result.success(status);
+            String responseStr = restTemplate.getForObject("http://localhost:8083/task_status?flag=" + flag, String.class);
+            // 使用 JSON 解析响应
+            JSONObject json = new JSONObject(responseStr);  // org.json
+
+            String status = json.optString("status", "unknown");
+            int duration = json.optInt("duration_seconds", -1);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("status", status);
+            result.put("duration", duration);
+
+            return Result.success(result);
         } catch (Exception e) {
             return Result.error("获取处理状态失败");
         }
     }
 
-    @GetMapping("/result/{flag}")// 下载处理后的视频（后端从 C++ 拉流）
-    public void getResult(@PathVariable String flag, HttpServletResponse response) {
+    @GetMapping("/analysis/{flag}")// 获取统计结果
+    public Result getAnalysis(@PathVariable String flag, HttpServletResponse response) {
         try {
-            RestTemplate rest = new RestTemplate();
-            ResponseEntity<byte[]> entity = rest.getForEntity("http://localhost:8083/result/" + flag, byte[].class);
-            byte[] body = entity.getBody();
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<List<String>> entity = restTemplate.getForEntity("http://localhost:8083/analysis?flag=" + flag, (Class<List<String>>) (Class<?>) List.class);
+            return Result.success(entity.getBody());
 
-            response.setContentType("video/mp4");
-            response.setHeader("Content-Disposition", "attachment; filename=result.mp4");
-            response.getOutputStream().write(body);
-            response.flushBuffer();
         } catch (Exception e) {
-            System.out.println("获取处理后视频失败：" + e.getMessage());
+            System.out.println("获取统计结果失败：" + e.getMessage());
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            return Result.error("获取统计结果失败：" + e.getMessage());
         }
     }
+
+//    @GetMapping("/result/{flag}")// 下载处理后的视频（后端从 C++ 拉流）/task_status?flag=
+//    public void getResult(@PathVariable String flag, HttpServletResponse response) {
+//        try {
+//            RestTemplate rest = new RestTemplate();
+//            ResponseEntity<byte[]> entity = rest.getForEntity("http://localhost:8083/result/" + flag, byte[].class);
+//            byte[] body = entity.getBody();
+//
+//            response.setContentType("video/mp4");
+//            response.setHeader("Content-Disposition", "attachment; filename=result.mp4");
+//            response.getOutputStream().write(body);
+//            response.flushBuffer();
+//        } catch (Exception e) {
+//            System.out.println("获取处理后视频失败：" + e.getMessage());
+//            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+//        }
+//    }
 
 }

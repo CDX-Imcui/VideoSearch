@@ -5,7 +5,7 @@
 
       <el-form :model="admin" class="form">
         <el-form-item>
-          <el-input v-model="admin.username" prefix-icon="User" placeholder="邮箱" />
+          <el-input v-model="admin.username" prefix-icon="User" placeholder="用户名" />
         </el-form-item>
         <el-form-item>
           <el-input v-model="admin.password" prefix-icon="Lock" placeholder="密码" show-password />
