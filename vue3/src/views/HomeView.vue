@@ -18,7 +18,6 @@
       <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
       <div class="el-upload__tip">支持 mp4/webm/avi，文件不超过1GB</div>
     </el-upload>
-
     <el-select
         v-model="selectedClasses"
         multiple
@@ -42,13 +41,23 @@
   <div class="video-section" v-show="LocalVideoURL">
     <div class="video-container">
       <h3>原视频</h3>
-      <video :src="LocalVideoURL" controls/>
-      <!--      <el-button-->
-      <!--          :style="{ visibility: form.video_guid && selectedClasses.length > 0 ? 'visible' : 'hidden' }"-->
-      <el-button
-          type="primary"
-          class="button"
-          @click="submitVideo">
+      <!--      TODO 使用自定义视频控件，就能完全精确定位进度条位置-->
+      <video :src="LocalVideoURL"
+             ref="videoRef"
+             @loadedmetadata="onLoadedMetadata"
+             controls/>
+      <!--      动态生成一个高亮覆盖层，用于标记视频播放进度条上的特定时间段。为该容器设置一个引用highlightOverlay。-->
+      <div v-if="duration > 0" ref="highlightOverlay" class="highlight-overlay">
+        <div v-for="(range, index) in analysisRanges"
+             :key="index"
+             class="highlight-segment"
+             :title="`${formatTime(range.start)} - ${formatTime(range.end)}`">
+          <!--          每个高亮段的样式（如宽度和位置）会在 positionHighlightOverlay 方法中动态计算，并根据视频的总时长和时间段范围调整-->
+          <!--        title 属性 鼠标悬停时显示时间段的起止时间，格式化为 mm:ss-->
+        </div>
+      </div>
+
+      <el-button type="primary" class="button" @click="submitVideo">
         <span>提交</span>
       </el-button>
     </div>
@@ -72,11 +81,10 @@
       </el-button>
     </div>
   </div>
-
 </template>
 
 <script setup lang="ts">
-import {reactive, ref} from 'vue'
+import {nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {DataAnalysis, Upload} from "@element-plus/icons-vue";
 import {ElMessage} from "element-plus";
 import request from "@/utils/request.ts";
@@ -109,14 +117,21 @@ interface Video {
 }
 
 const form = reactive<Partial<Video>>({});
-const user = ref(
-    localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") as string) : {}
-);
 
 const LocalVideoURL = ref<string | undefined>(undefined);//要求 LocalVideoURL 在无视频时为假值
 // const LocalVideoURL = ref<string>('');//在布尔上下文中，undefined 和空字符串都会被视为 false，也可以
 const processed = ref<boolean>(false);
-let analysis = ref<string[]>([]);
+
+const videoRef = ref<HTMLVideoElement | null>(null);
+const duration = ref(0);
+const highlightOverlay = ref<HTMLElement | null>(null);
+
+interface TimeRange {
+  start: number;
+  end: number;
+}
+
+let analysisRanges = ref<TimeRange[]>([]);
 
 function beforeUpload(file: File) {
   const maxSize = 1024 * 1024 * 1024; // 1GB
@@ -212,48 +227,83 @@ function checkVideoReady(videoGuid: string) {
 // getAnalysis
 const getAnalysis = async () => {
   try {
-    ElMessage.success("getAnalysis函数开始执行");
     const res = await request.get('/files/analysis/' + form.video_guid);
     if (res.code === 200) {
-      analysis.value = res.data;
-      analysis.value = parseRangeToMinSec(analysis.value)
-      console.log('分析结果:', analysis.value);
+      analysisRanges.value = res.data.map((item: string) => {//map 会遍历数组中的每个元素。  将回调函数的返回值收集到一个新的数组中，最终返回这个新数组
+        const [start, end] = item.split('-').map(Number);//使用解构赋值； "12.5-15.0" -> {start: 12.5, end: 15.0}
+        return {start, end};
+      });
+      console.log('分析结果:', analysisRanges.value);
+      await nextTick(() => {
+        positionHighlightOverlay();
+      });
     } else {
       ElMessage.error('分析统计失败，res.code: ' + res.code + ', res.message: ' + res.message);
     }
   } catch (e) {
     ElMessage.error('分析失败：' + (e as Error).message);
   }
-
 };
 
-function parseRangeToMinSec(ranges: string[]): string[] {
-  // 辅助：把数字字符串转成 分'秒'' 格式
-  function toMinSec(numStr: string): string {
-    const num = parseFloat(numStr);
-    if (isNaN(num)) return numStr;
-    const min = Math.floor(num);
-    const sec = ((num - min) * 60).toFixed(2);
-    return `${min}:${sec}、`;
-  }
 
-  return ranges.map(range => {
-    const parts = range.split('-');
-    if (parts.length !== 2) return range; // 格式异常，直接返回
-    const start = toMinSec(parts[0]);
-    const end = toMinSec(parts[1]);
-    return `${start} - ${end}`;
-  });
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
 
 function showAnalysis() {
-  const formattedStr = analysis.value.join(', ');
+  const formattedStr = analysisRanges.value
+      .map(range => `${formatTime(range.start)} - ${formatTime(range.end)}`)
+      .join(', ');
   ElMessage.success(formattedStr);
 }
+
+
+function onLoadedMetadata() {//当视频的元数据（如时长、尺寸等）加载完成时
+  if (!videoRef.value) return;//检查 videoRef 是否存在，确保引用的 <video> 元素有效
+  duration.value = videoRef.value.duration;//获取视频的总时长
+  nextTick(() => {
+    positionHighlightOverlay();
+  });
+}
+
+// 自动找到原生 <video> 控件的进度条位置
+function positionHighlightOverlay() {
+  if (!videoRef.value || !highlightOverlay.value) return;
+  const videoRect = videoRef.value.getBoundingClientRect();//获取原视频元素的尺寸和相对于视口的位置
+
+  // 设置overlay宽度等于视频宽度
+  highlightOverlay.value.style.width = `${videoRect.width}px`;
+  //计算高亮覆盖层的垂直位置
+  const bottomOffsetPx = 30;//手动计算进度条DOM 视频控件高度350px，进度条在视频底部上30px左右
+  highlightOverlay.value.style.top = `${videoRect.bottom - bottomOffsetPx}px`;
+  // 设置 overlay 左侧对齐视频左侧
+  highlightOverlay.value.style.left = `${videoRect.left}px`;
+
+  // 更新每个区间位置与宽度
+  const dur = duration.value || 1;
+  analysisRanges.value.forEach((range, idx) => {
+    const seg = highlightOverlay.value!.children[idx] as HTMLElement;//感叹号是TS非空断言操作符，告诉编译器value在运行时非null
+    seg.style.left = `${(range.start / dur) * 100}%`;
+    seg.style.width = `${((range.end - range.start) / dur) * 100}%`;
+  });
+}
+
+
+onMounted(() => {
+  window.addEventListener('resize', positionHighlightOverlay);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', positionHighlightOverlay);
+});
+
+
 </script>
 
-<style scoped>
 
+<style scoped>
 .upload-section {
   display: flex;
   max-width: 800px;
@@ -310,5 +360,28 @@ video {
   margin: 10px 0;
   width: 622px;
 }
+
+.highlight-overlay {
+  position: absolute;
+  left: 0;
+  height: 10px; /* 高亮条厚度 */
+  pointer-events: none; /* 不影响拖动进度条 */
+
+  /* 灰色背景*/
+  background: rgba(0, 0, 0, 0.2); /* 半透明灰色底、rgba(255, 0, 0, 0.5) */
+  border-radius: 2px;
+  overflow: hidden; /* 防止内部高亮段溢出圆角 */
+  z-index: 20;
+}
+
+.highlight-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: rgba(102, 165, 232, 0.8);
+  backdrop-filter: blur(2px); /* 背景模糊 */
+  border-radius: 2px;
+}
+
 </style>
 
