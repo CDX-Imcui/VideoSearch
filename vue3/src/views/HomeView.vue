@@ -18,30 +18,20 @@
       <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
       <div class="el-upload__tip">支持 mp4/webm/avi，文件不超过1GB</div>
     </el-upload>
-    <el-select
-        v-model="selectedClasses"
-        multiple
-        filterable
-        placeholder="查找"
-        class="class-selector">
-      <el-option
-          v-for="item in CLASS_NAMES"
-          :key="item"
-          :label="item"
-          :value="item">
-        <el-icon style="margin-right: 6px;">
-          <i :class="selectedClasses.includes(item) ? 'el-icon-check' : 'el-icon-circle-check-outline'"/>
-        </el-icon>
-        {{ item }}
-      </el-option>
-    </el-select>
+
+    <!-- 元数据信息 -->
+    <div v-if="form.video_guid">
+      <span>时长: {{ formatTime(duration) }}</span><br>
+      <span>大小: {{ form.file_size ? (form.file_size / (1024 * 1024)).toFixed(2) : '0.00' }} MB</span><br>
+      <span>文件名: {{ form.video_name }}</span><br>
+      <span>分辨率: {{ form.width }} × {{ form.height }}</span>
+    </div>
   </div>
 
   <!--视频播放区域-->
   <div class="video-section" v-show="LocalVideoURL">
     <div class="video-container">
-      <h3>原视频</h3>
-      <!--      TODO 使用自定义视频控件，就能完全精确定位进度条位置-->
+      <h3>{{ form.video_guid }}</h3>
       <video :src="LocalVideoURL"
              ref="videoRef"
              @loadedmetadata="onLoadedMetadata"
@@ -56,15 +46,32 @@
           <!--        title 属性 鼠标悬停时显示时间段的起止时间，格式化为 mm:ss-->
         </div>
       </div>
-
-      <el-button type="primary" class="button" @click="submitVideo">
-        <span>提交</span>
-      </el-button>
+      <div style="display: flex;width: 622px;">
+        <el-select
+            v-model="selectedClasses"
+            multiple
+            filterable
+            placeholder="只看"
+            style="width: 300px;margin: 10px 0;">
+          <el-option
+              v-for="item in CLASS_NAMES"
+              :key="item"
+              :label="item"
+              :value="item">
+            <el-icon style="margin-right: 6px;">
+              <i :class="selectedClasses.includes(item) ? 'el-icon-check' : 'el-icon-circle-check-outline'"/>
+            </el-icon>
+            {{ item }}
+          </el-option>
+        </el-select>
+        <el-button type="primary" style="margin: 10px 0 10px 10px;flex: 1;" @click="submitVideo">
+          <span>确定</span>
+        </el-button>
+      </div>
     </div>
 
     <div class="video-container">
-
-      <h3>搜索后</h3>
+      <h3>只看{{ selectedClasses.join('、')}}</h3>
       <video
           id="resultVideo"
           controls
@@ -73,7 +80,7 @@
           preload="metadata">
         does not support the video tag
       </video>
-      <el-button class="button" type="success" @click="showAnalysis">
+      <el-button style="margin: 10px 0;width: 622px;" type="success" @click="showAnalysis">
         <el-icon>
           <DataAnalysis/>
         </el-icon>
@@ -84,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import {nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {nextTick, onBeforeUnmount, onMounted, reactive, ref} from 'vue'
 import {DataAnalysis, Upload} from "@element-plus/icons-vue";
 import {ElMessage} from "element-plus";
 import request from "@/utils/request.ts";
@@ -112,6 +119,8 @@ interface Video {
   finish_time?: string;
   status?: 'pending' | 'processing' | 'done' | 'failed';
   remarks?: string;
+  width?: number;
+  height?: number;
 
   [key: string]: any;
 }
@@ -139,13 +148,15 @@ function beforeUpload(file: File) {
     ElMessage.error('上传文件不能超过 1GB');
     return false; // 阻止上传
   }
+  form.file_size = file.size; // 保存文件大小
   return true; // 允许上传
 }
 
 // 选中文件后展示缩略图
-function handleFileChange(fileObj: any) {//函数会在用户选择文件后被调用，接收一个 fileObj 参数
+function handleFileChange(fileObj: any) {//选择文件后接收一个fileObj参数
   const file = fileObj.raw//从文件对象中获取原始文件
   if (!file) return
+  form.video_name = file.name;
   //为文件创建一个临时 URL，指向本地文件的临时链接，可以用来预览文件内容
   LocalVideoURL.value = URL.createObjectURL(file)
 }
@@ -263,6 +274,8 @@ function showAnalysis() {
 function onLoadedMetadata() {//当视频的元数据（如时长、尺寸等）加载完成时
   if (!videoRef.value) return;//检查 videoRef 是否存在，确保引用的 <video> 元素有效
   duration.value = videoRef.value.duration;//获取视频的总时长
+  form.width = videoRef.value.videoWidth;
+  form.height = videoRef.value.videoHeight;
   nextTick(() => {
     positionHighlightOverlay();
   });
@@ -273,13 +286,13 @@ function positionHighlightOverlay() {
   if (!videoRef.value || !highlightOverlay.value) return;
   const videoRect = videoRef.value.getBoundingClientRect();//获取原视频元素的尺寸和相对于视口的位置
 
-  // 设置overlay宽度等于视频宽度
-  highlightOverlay.value.style.width = `${videoRect.width}px`;
+  // 设置overlay宽度等于实际进度条 !!! 视频宽度减去估计值
+  highlightOverlay.value.style.width = `${videoRect.width - 35}px`;
   //计算高亮覆盖层的垂直位置
   const bottomOffsetPx = 30;//手动计算进度条DOM 视频控件高度350px，进度条在视频底部上30px左右
   highlightOverlay.value.style.top = `${videoRect.bottom - bottomOffsetPx}px`;
-  // 设置 overlay 左侧对齐视频左侧
-  highlightOverlay.value.style.left = `${videoRect.left}px`;
+  // 设置 overlay 左侧对齐进度条左侧 !!! 视频左侧往右偏移20px
+  highlightOverlay.value.style.left = `${videoRect.left + 17}px`;
 
   // 更新每个区间位置与宽度
   const dur = duration.value || 1;
@@ -306,10 +319,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .upload-section {
   display: flex;
-  max-width: 800px;
   gap: 20px;
   margin-bottom: 30px;
-  padding: 20px;
+  padding: 10px;
   border-radius: 8px;
   background-color: #f5f7fa;
 }
@@ -321,15 +333,11 @@ onBeforeUnmount(() => {
   border-radius: 10px;
 }
 
-.class-selector {
-  width: 300px;
-}
-
 .video-section {
   display: flex;
   align-items: flex-start;
   gap: 20px;
-  padding: 20px 30px;
+  padding: 20px 20px;
   border-radius: 8px;
   background-color: #f5f7fa;
   justify-content: space-between; /* 确保均匀分布 */
@@ -354,11 +362,6 @@ video {
   margin: 0 auto; /* 水平居中 */
   border-radius: 4px;
   background: #000; /* 没资源时显示黑底，不会很窄 */
-}
-
-.button {
-  margin: 10px 0;
-  width: 622px;
 }
 
 .highlight-overlay {
